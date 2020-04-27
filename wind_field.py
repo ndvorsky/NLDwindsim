@@ -114,8 +114,8 @@ def z_to_j(z_coor, max_j, z_coords):
 x_vels = np.array([])
 z_vels = np.array([])
 
-dx = 1
-dz = -1
+dx = 0.5
+dz = -0.5
 x_coords = np.arange(-40, 40, dx)
 z_coords = np.arange(0, -40, dz)
 
@@ -188,8 +188,10 @@ m = 1.75 # kg
 S = 1 # m^2
 rho = 1.225 # kg/m^3
 g = 9.80665 # m/s^2
+CL_alpha = 5.7 # 1/rad
+alpha_0L = np.deg2rad(-4)
 AR = 3
-e = 0.5
+e = 0.8
 CD_0 = 0.05
 W = m*g
 V_a = 25 #m/s
@@ -201,7 +203,29 @@ x_i = 7
 z_i = -15
 D_prop = 0.3 # m
 
+Cdi_coef = 1/(np.pi*AR*e) # 1/pi*A*e
+
 P_maxs = (16/27)*(rho/2)* Total_wind**3 * (np.pi*D_prop**2)/4
+
+
+def calc_eq():
+    C_L_req = W/(0.5*rho*np.power(Total_wind, 2)*S) * (np.abs(Winds_u)/Total_wind)
+    C_D_req = W / (0.5 * rho * np.power(Total_wind, 2) * S) * (np.abs(Winds_v) / Total_wind)
+
+    C_D_min_ach = CD_0+np.power(C_L_req, 2)*Cdi_coef
+    C_D_max_ach = C_D_min_ach + 1*(2/9)*0.1
+
+    alpha = C_L_req / CL_alpha + alpha_0L
+
+    stall = (alpha > np.deg2rad(15)) & (alpha < np.deg2rad(-10))
+    C_L_req[stall] = np.nan
+    C_D_req[stall] = np.nan
+    C_D_min_ach[stall] = np.nan
+    C_D_max_ach[stall] = np.nan
+
+    eq_points = (C_D_req > C_D_min_ach) & (C_D_req < C_D_max_ach)
+
+    return eq_points
 
 # vars to store
 ts = np.array([])
@@ -215,7 +239,9 @@ V_airs = np.array([])
 #print(wind_comp(-11, -12, U_inf))
 
 C_L_opt = np.sqrt(3*np.pi*AR*e*CD_0)
-C_D_opt = CD_0 = C_L_opt**2/(np.pi*AR*e)
+C_D_opt = CD_0 + C_L_opt**2/(np.pi*AR*e)
+
+eq_positions = calc_eq()
 
 while t < 0.1:
 
@@ -287,11 +313,16 @@ while t < 0.1:
     gamma_a += dgamma_dt*dt
     t += dt
 
+def get_local_min_h_dot(V_loc):
+    min_h_dot = (rho * S * CD_0) / (2 * m * g) * V_loc ** 3 + (2 * m * g * Cdi_coef) / (rho * S * V_loc)
+    return min_h_dot
 
 ax[0][0].plot(x_is, z_is)
 min_h_dot = np.sqrt(W/(0.5*rho*S))*C_D_opt/(C_L_opt**(1.5))
 print(P_maxs)
-P_maxs = np.ma.masked_where(Winds_v <= min_h_dot, P_maxs)
+P_maxs = np.ma.masked_where(Winds_v <= get_local_min_h_dot(Total_wind), P_maxs)
+P_maxs = np.ma.masked_where(eq_positions == False, P_maxs)
+
 
 cp = ax[0][0].contourf(xs, zs, P_maxs , 50,cmap='Reds')#locator=ticker.LogLocator(subs=0.5), cmap='Reds')
 fig.colorbar(cp)
