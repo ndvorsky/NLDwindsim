@@ -1,10 +1,10 @@
 import numpy as np
 from matplotlib import pyplot as plt
-from scipy.optimize import fsolve
+#from scipy.optimize import fsolve
 from matplotlib import ticker, cm
 
 R_ridge = 10.0 # m
-U_inf = -10.0 # m/s
+U_inf = -15.0 # m/s
 a = 10 # m, defines loci x-position
 x_stag = 14 # m, defines a-axis of standard oval
 b = np.sqrt(x_stag**2 - a**2)
@@ -117,7 +117,7 @@ z_vels = np.array([])
 dx = 0.5
 dz = -0.5
 x_coords = np.arange(-40, 40, dx)
-z_coords = np.arange(0, -40, dz)
+z_coords = np.arange(0, -20, dz)
 
 xs, zs = np.meshgrid(x_coords, z_coords)
 
@@ -207,13 +207,15 @@ Cdi_coef = 1/(np.pi*AR*e) # 1/pi*A*e
 
 P_maxs = (16/27)*(rho/2)* Total_wind**3 * (np.pi*D_prop**2)/4
 
-
+S_turb_spec = 0.05 # 0.006 for smalles point at gridsize of 0.1
 def calc_eq():
     C_L_req = W/(0.5*rho*np.power(Total_wind, 2)*S) * (np.abs(Winds_u)/Total_wind)
     C_D_req = W / (0.5 * rho * np.power(Total_wind, 2) * S) * (np.abs(Winds_v) / Total_wind)
 
     C_D_min_ach = CD_0+np.power(C_L_req, 2)*Cdi_coef
-    C_D_max_ach = C_D_min_ach + 1*(2/9)*0.1
+    C_D_max_ach = C_D_min_ach + 1*(2/9)*S_turb_spec
+
+    C_D_turb = C_D_req - C_D_min_ach
 
     alpha = C_L_req / CL_alpha + alpha_0L
 
@@ -222,10 +224,13 @@ def calc_eq():
     C_D_req[stall] = np.nan
     C_D_min_ach[stall] = np.nan
     C_D_max_ach[stall] = np.nan
+    alpha[stall] = np.nan
 
     eq_points = (C_D_req > C_D_min_ach) & (C_D_req < C_D_max_ach)
-
-    return eq_points
+    P_turb = 0.5*rho*S*np.power(Total_wind, 3)*C_D_turb
+    P_turb[eq_points == False] = np.nan
+    alpha[eq_points == False] = np.nan
+    return P_turb, np.rad2deg(alpha)
 
 # vars to store
 ts = np.array([])
@@ -241,7 +246,8 @@ V_airs = np.array([])
 C_L_opt = np.sqrt(3*np.pi*AR*e*CD_0)
 C_D_opt = CD_0 + C_L_opt**2/(np.pi*AR*e)
 
-eq_positions = calc_eq()
+P_turbs, alphas_eq = calc_eq()
+
 
 while t < 0.1:
 
@@ -320,11 +326,11 @@ def get_local_min_h_dot(V_loc):
 ax[0][0].plot(x_is, z_is)
 min_h_dot = np.sqrt(W/(0.5*rho*S))*C_D_opt/(C_L_opt**(1.5))
 print(P_maxs)
-P_maxs = np.ma.masked_where(Winds_v <= get_local_min_h_dot(Total_wind), P_maxs)
-P_maxs = np.ma.masked_where(eq_positions == False, P_maxs)
+P_turbs = np.ma.masked_where(Winds_v <= get_local_min_h_dot(Total_wind), alphas_eq) # changed to P_maxs
 
 
-cp = ax[0][0].contourf(xs, zs, P_maxs , 50,cmap='Reds')#locator=ticker.LogLocator(subs=0.5), cmap='Reds')
+
+cp = ax[0][0].contourf(xs, zs, P_turbs , 50,cmap='Reds')#locator=ticker.LogLocator(subs=0.5), cmap='Reds')
 fig.colorbar(cp)
 ax[0][0].set_xlabel('x location [m]')
 ax[0][0].set_ylabel('z location [m]')
