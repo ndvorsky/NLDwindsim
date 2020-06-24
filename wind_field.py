@@ -9,22 +9,25 @@ Author: Midas Gossye
 
 import numpy as np
 from matplotlib import pyplot as plt
+import csv
 from matplotlib import ticker, cm
 
 
 # Define general hill parameters
 
-R_ridge = 10.0 # [m] Radius of the hill/ridge
-U_inf = -15.0 # [m/s] Mean wind speed (negative to have flow flow right to left)
+R_ridge = 50.0 # [m] Radius of the hill/ridge
+U_inf = -25.0 # [m/s] Mean wind speed (negative to have flow flow right to left)
 flow_type = 'oval' # Defines if hill is cylindrical or oval, options: 'oval' and 'circle'
 
 # Oval shaped hill parameters
-a = 10 # m, defines loci x-position
-x_stag = 14 # m, defines a-axis of standard oval
+a = 45 # m, defines loci x-position
+x_stag = 67 # m, defines a-axis of standard oval
 b = np.sqrt(x_stag**2 - a**2) # calculates b parameter of oval
 
+surf_rough = 0.5 # m, surface roughness
 
-
+oval_pointsx = np.array([])
+oval_pointsz = np.array([])
 
 def wind_comp(x_i, z_i, U):
     ## Wind field calculation function
@@ -40,31 +43,27 @@ def wind_comp(x_i, z_i, U):
 
         ellipse_eq = (x_i ** 2) / (x_stag ** 2) + (z_i ** 2) / (b ** 2)
         if ellipse_eq < 1:
-            return 0,0
+            return 0.0, 0.0
 
         if x_i < x_stag:
 
             z_ellipse = -b / x_stag * np.sqrt(x_stag ** 2 - x_i ** 2)
 
-
-            #v_x *= ((z_i - z_ellipse)/-20)**(1/7)
-            #v_z *= ((z_i - z_ellipse) / -20) ** (1 / 7)
-
-            mult_factor = (np.log(-(z_i - z_ellipse))/0.05)/(np.log(-(-20 - z_ellipse))/0.05)
-            print("z_ab =", (z_i - z_ellipse), "mult =", mult_factor)
-            if not(np.isnan(mult_factor)):
-                pass
-                #v_x *= mult_factor
-                #v_z *= mult_factor
+            mult_factor = (np.log(-(z_i - z_ellipse) / surf_rough)) / (np.log(-(-70 - z_ellipse) / surf_rough))
+            if mult_factor < 0:
+                print("z_ab =", -(z_i - z_ellipse), "mult =", mult_factor)
+            if not (np.isnan(mult_factor)):
+                v_x *= mult_factor
+                v_z *= mult_factor
 
         else:
             if z_i < 0:
                 z_ellipse = -0.01
-                mult_factor = (np.log(-(z_i - z_ellipse)) / 0.05) / (np.log(-(-20 - z_ellipse)) / 0.05)
-                #v_x *= mult_factor
-                #v_z *= mult_factor
+                mult_factor = (np.log(-(z_i - z_ellipse) / surf_rough)) / (np.log(-(-70 - z_ellipse) / surf_rough))
+                v_x *= mult_factor
+                v_z *= mult_factor
             else:
-                return 0,0
+                return 0.0, 0.0
         return v_x, v_z
 
     elif flow_type == 'circle':
@@ -80,13 +79,13 @@ def wind_comp(x_i, z_i, U):
 
         else:
             z_circle = -0.01
-        mult_factor = (np.log(-(z_i - z_circle)) / 0.05) / (np.log(-(-20 - z_circle)) / 0.05)
+        mult_factor = (np.log(-(z_i - z_circle) / surf_rough)) / (np.log(-(-70 - z_circle) / surf_rough))
         u_x = np.cos(theta)*u_r - np.sin(theta)*u_th*mult_factor
         u_z = (np.sin(theta)*u_r + np.cos(theta)*u_th)*mult_factor
 
 
         if r<R_ridge:
-            return 0,0
+            return 0.0,0.0
 
         return u_x, u_z
 
@@ -133,22 +132,22 @@ dz = -0.5
 ## ======================================
 
 ## Create x and z coordinate array
-x_coords = np.arange(-40, 40, dx) # specifies range of x coords
-z_coords = np.arange(0, -20, dz)  # specifies range of z coords
+x_coords = np.arange(-5, 100, dx) # specifies range of x coords
+z_coords = np.arange(0, -100, dz)  # specifies range of z coords
 ## ======================================
 
 xs, zs = np.meshgrid(x_coords, z_coords) # create meshgrid to construct wind velocity field
 
 Winds_u, Winds_v = vwind_comp(xs, zs, U_inf) # generates 2D matrices with horizontal and vertical wind velocity components
 
-Total_wind = np.sqrt(Winds_u**2 + Winds_v**2) # generates 2D matrix with total wind velocities
+Total_wind = np.sqrt(np.power(Winds_u, 2) + np.power(Winds_v, 2)) # generates 2D matrix with total wind velocities
 
 jacobians = np.zeros((len(x_coords), len(z_coords), 2,2)) # Initialize empty jacobian matrix
 
 for i in range(1, x_coords.size-1):
     for j in range(1, z_coords.size-1):
-        print("i:", i)
-        print("j:", j)
+        #print("i:", i)
+        #print("j:", j)
         jacobians[i, j] = calc_jacobian(i, j, dx, dz, Winds_u, Winds_v)
 
 
@@ -170,39 +169,43 @@ else:
 fig, ax = plt.subplots(1,1) # initialize pyplot figures (2 rows, 3 columns)
 #ax[0][0].invert_yaxis() # invert y-axis on plot (represent z-axis)
 ax.invert_yaxis()
-skip=(slice(None,None,4),slice(None,None,4))
+skip=(slice(None,None,10),slice(None,None,10))
 #ax[0][0].quiver(xs[skip], zs[skip], Winds_u[skip], Winds_v[skip], Total_wind[skip], cmap='Reds') # plots vector field
 qv1 = ax.quiver(xs[skip], zs[skip], Winds_u[skip], Winds_v[skip], Total_wind[skip], cmap='cool') # plots vector field
 #ax[0][0].streamplot(xs, zs, Winds_u, -Winds_v, density=1) # creates streamlines on plot
 ax.streamplot(xs, zs, Winds_u, -Winds_v, density=1) # creates streamlines on plot
 #ax[0][0].plot(xs_hill, zs_hill, '-r')
 ax.plot(xs_hill, zs_hill, '-r')
-## initial conditions
-m = 1.75 # kg
+
+
+## initial conditions for simulated aircraft in wind field
+m = 4.0 # kg
 
 S = 1 # m^2
 rho = 1.225 # kg/m^3
 g = 9.80665 # m/s^2
 CL_alpha = 5.7 # 1/rad
 alpha_0L = np.deg2rad(-4)
-AR = 3
+AR = 6
 e = 0.8
-CD_0 = 0.05
+CD_0 = 0.1
 W = m*g
 V_a = 25 #m/s
 gamma_a = -10*(np.pi/180) # deg/rad
 dgamma_dt = 0 # rad/s
 dt = 0.01 # s
 t = 0 #s
-x_i = 7
-z_i = -15
+x_i = 17
+z_i = -5
 D_prop = 0.3 # m
 
 Cdi_coef = 1/(np.pi*AR*e) # 1/pi*A*e
 
 P_maxs = (16/27)*(rho/2)* Total_wind**3 * (np.pi*D_prop**2)/4
 
-S_turb_spec = 0.05 # 0.006 for smalles point at gridsize of 0.1
+S_turb_spec = 0.14 # 0.006 for smallest point at gridsize of 0.1
+
+
 def calc_eq():
     C_L_req = W/(0.5*rho*np.power(Total_wind, 2)*S) * (np.abs(Winds_u)/Total_wind)
     C_D_req = W / (0.5 * rho * np.power(Total_wind, 2) * S) * (np.abs(Winds_v) / Total_wind)
@@ -212,9 +215,12 @@ def calc_eq():
 
     C_D_turb = C_D_req - C_D_min_ach
 
+    D_turb = 0.5*rho*np.power(Total_wind, 2)*S*C_D_turb
+
     alpha = C_L_req / CL_alpha + alpha_0L
 
     stall = (alpha > np.deg2rad(15)) & (alpha < np.deg2rad(-10))
+    print("stall condition:", stall[stall == True])
     C_L_req[stall] = np.nan
     C_D_req[stall] = np.nan
     C_D_min_ach[stall] = np.nan
@@ -225,7 +231,8 @@ def calc_eq():
     P_turb = 0.5*rho*S*np.power(Total_wind, 3)*C_D_turb
     P_turb[eq_points == False] = np.nan
     alpha[eq_points == False] = np.nan
-    return P_turb, np.rad2deg(alpha)
+    D_turb[eq_points == False] = np.nan
+    return P_turb, np.rad2deg(alpha), D_turb
 
 # vars to store
 ts = np.array([])
@@ -241,10 +248,10 @@ V_airs = np.array([])
 C_L_opt = np.sqrt(3*np.pi*AR*e*CD_0)
 C_D_opt = CD_0 + C_L_opt**2/(np.pi*AR*e)
 
-P_turbs, alphas_eq = calc_eq()
+P_turbs, alphas_eq, D_turb = calc_eq()
 
 
-while t < 0.1:
+while t < 1:
 
     if np.isnan(x_i):
         print("BIG ERROR")
@@ -319,18 +326,34 @@ def get_local_min_h_dot(V_loc):
     return min_h_dot
 
 #ax[0][0].plot(x_is, z_is)
-ax.plot(x_is, z_is)
-min_h_dot = np.sqrt(W/(0.5*rho*S))*C_D_opt/(C_L_opt**(1.5))
+#ax.plot(x_is, z_is)
+#min_h_dot = np.sqrt(W/(0.5*rho*S))*C_D_opt/(C_L_opt**(1.5))
 print(P_maxs)
 P_turbs = np.ma.masked_where(Winds_v <= get_local_min_h_dot(Total_wind), P_turbs) # changed to P_maxs
+P_turb_max = np.nanmax(P_turbs)
+print("max P_turb:", P_turb_max)
+#5 * round(P_turb_max/5)+0.1
+D_turbs = np.ma.masked_where(Winds_v <= get_local_min_h_dot(Total_wind), D_turb)
+
+colormap_levels = np.arange(0, 5 * round(P_turb_max/5), 0.1)
+colormap_levels2 = np.arange(0, 1 * round(np.nanmax(D_turbs)/1), 0.1)
 
 
-colormap_levels = np.arange(0, 10, 0.1)
+
+
+
 #colormap_levels = 50
 #cp = ax[0][0].contourf(xs, zs, P_turbs , colormap_levels,cmap='Reds')#locator=ticker.LogLocator(subs=0.5), cmap='Reds')
-cp = ax.contourf(xs, zs, P_turbs , colormap_levels,cmap='Reds')#locator=ticker.LogLocator(subs=0.5), cmap='Reds')
-cbar = plt.colorbar(cp)
-cbar.set_label("Max regen power [W]")
+#cp = ax.contourf(xs, zs, P_turbs, colormap_levels, cmap='Reds')#locator=ticker.LogLocator(subs=0.5), cmap='Reds')
+cp3 = ax.contourf(xs, zs, D_turbs, colormap_levels2, cmap='Reds')
+
+xs_eq = np.ma.masked_where(np.isnan(P_turbs), xs)
+zs_eq = np.ma.masked_where(np.isnan(P_turbs), zs)
+#ax.plot(xs_eq, zs_eq, '*r')
+#cbar = plt.colorbar(cp)
+cbar3 = plt.colorbar(cp3)
+#cbar.set_label("Max regen power [W]")
+cbar3.set_label("Max Turbine Drag [N]")
 
 cbar2 = plt.colorbar(qv1)
 cbar2.set_label("Total wind speed [m/s]")
@@ -338,7 +361,8 @@ cbar2.set_label("Total wind speed [m/s]")
 ax.set_xlabel('x location [m]')
 #ax[0][0].set_ylabel('z location [m]')
 ax.set_ylabel('z location [m]')
-
+#str(np.around(S_turb_spec*100, 2)) + ' % of S'
+ax.set_title('Regen simulation for oval hill section, surf roughness: ' + str(surf_rough) + ' [V_inf = ' + str(U_inf) + ']')
 # ax[0][1].plot(x_is, V_as)
 # ax[0][1].set_ylabel('Airspeed [m/s]')
 # ax[1][0].plot(x_is, W_xs_s)
@@ -350,6 +374,12 @@ ax.set_ylabel('z location [m]')
 # ax[0][2].plot(x_is, Ps_turb)
 # ax[0][2].set_ylabel('P_turb [W]')
 # ax[0][2].set_xlabel('x location [m]')
+#ax.plot(oval_pointsx, oval_pointsz, '*b')
+ax.set_xlim([0,100])
+ax.set_ylim([0,-100])
 plt.show()
 
-
+#np.savetxt("results.csv", P_turbs, delimiter=",")
+#np.savetxt("total_winds.csv", Total_wind, delimiter=",")
+#np.savetxt("winds_u.csv", Winds_u, delimiter=",")
+#np.savetxt("winds_v.csv", Winds_v, delimiter=",")
