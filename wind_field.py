@@ -190,7 +190,7 @@ AR = 6
 e = 0.8
 CD_0 = 0.1
 W = m*g
-V_a = 25 #m/s
+V_a = 25 # initial airspeed for simulated aircraft m/s
 gamma_a = -10*(np.pi/180) # deg/rad
 dgamma_dt = 0 # rad/s
 dt = 0.01 # s
@@ -379,7 +379,7 @@ ax.set_xlim([0,100])
 ax.set_ylim([0,-100])
 plt.show()
 
-#np.savetxt("results.csv", P_turbs, delimiter=",")
-#np.savetxt("total_winds.csv", Total_wind, delimiter=",")
-#np.savetxt("winds_u.csv", Winds_u, delimiter=",")
-#np.savetxt("winds_v.csv", Winds_v, delimiter=",")
+np.savetxt("drag_vals.csv", D_turbs, delimiter=",")
+np.savetxt("total_winds.csv", Total_wind, delimiter=",")
+np.savetxt("winds_u.csv", Winds_u, delimiter=",")
+np.savetxt("winds_v.csv", Winds_v, delimiter=",")
